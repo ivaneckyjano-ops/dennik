@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Env
+.env
+
+# Editor
+.vscode/
+.idea/
+
+# Caches and app-specific
+.cache/
+instance/
+uploads/
+
+# OS
+.DS_Store
