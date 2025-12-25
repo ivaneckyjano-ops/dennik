@@ -1,0 +1,940 @@
+// Globálne premenné
+let currentPage = 1;
+let currentFilters = {};
+let categories = [];
+let editingEntryId = null;
+
+// Inicializácia aplikácie
+document.addEventListener('DOMContentLoaded', function() {
+    loadCategories();
+    loadYears();
+    loadEntries();
+    setCurrentDateTime();
+});
+
+// Načítanie kategórií
+async function loadCategories() {
+    try {
+        const response = await fetch('/api/categories/main');
+        const data = await response.json();
+        
+        if (data.categories) {
+            categories = data.categories;
+            populateCategoryFilters();
+            populateEntryCategories();
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní kategórií:', error);
+        showAlert('Chyba pri načítavaní kategórií', 'danger');
+    }
+}
+
+// Naplnenie kategórií do filtra
+function populateCategoryFilters() {
+    const mainCategoryFilter = document.getElementById('mainCategoryFilter');
+    mainCategoryFilter.innerHTML = '<option value="">Všetky kategórie</option>';
+    
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = `${category.icon} ${category.name}`;
+        mainCategoryFilter.appendChild(option);
+    });
+    
+    // Vyčisti podkategórie
+    const subcategoryFilter = document.getElementById('subcategoryFilter');
+    subcategoryFilter.innerHTML = '<option value="">Všetky podkategórie</option>';
+    subcategoryFilter.disabled = true;
+}
+
+// Naplnenie kategórií do formulára
+function populateEntryCategories() {
+    const entryMainCategory = document.getElementById('entryMainCategory');
+    entryMainCategory.innerHTML = '<option value="">Vyber hlavnú kategóriu</option>';
+    
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = `${category.icon} ${category.name}`;
+        entryMainCategory.appendChild(option);
+    });
+    
+    // Vyčisti podkategórie
+    const entrySubcategory = document.getElementById('entrySubcategory');
+    entrySubcategory.innerHTML = '<option value="">Vyber podkategóriu</option>';
+    entrySubcategory.disabled = true;
+}
+
+// Aktualizácia podkategórií vo filtre
+async function updateSubcategoryFilter() {
+    const mainCategoryId = document.getElementById('mainCategoryFilter').value;
+    const subcategoryFilter = document.getElementById('subcategoryFilter');
+    
+    if (!mainCategoryId) {
+        subcategoryFilter.innerHTML = '<option value="">Všetky podkategórie</option>';
+        subcategoryFilter.disabled = true;
+        loadEntries(1);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/categories/${mainCategoryId}/subcategories`);
+        const data = await response.json();
+        
+        subcategoryFilter.innerHTML = '<option value="">Všetky podkategórie</option>';
+        
+        if (data.categories && data.categories.length > 0) {
+            data.categories.forEach(subcategory => {
+                const option = document.createElement('option');
+                option.value = subcategory.id;
+                option.textContent = `${subcategory.icon} ${subcategory.name}`;
+                subcategoryFilter.appendChild(option);
+            });
+            subcategoryFilter.disabled = false;
+        } else {
+            subcategoryFilter.disabled = true;
+        }
+        
+        loadEntries(1);
+    } catch (error) {
+        console.error('Chyba pri načítavaní podkategórií:', error);
+        subcategoryFilter.disabled = true;
+    }
+}
+
+// Aktualizácia podkategórií vo formulári
+async function updateEntrySubcategories() {
+    const mainCategoryId = document.getElementById('entryMainCategory').value;
+    const entrySubcategory = document.getElementById('entrySubcategory');
+    
+    if (!mainCategoryId) {
+        entrySubcategory.innerHTML = '<option value="">Vyber podkategóriu</option>';
+        entrySubcategory.disabled = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/categories/${mainCategoryId}/subcategories`);
+        const data = await response.json();
+        
+        entrySubcategory.innerHTML = '<option value="">Vyber podkategóriu</option>';
+        
+        if (data.categories && data.categories.length > 0) {
+            data.categories.forEach(subcategory => {
+                const option = document.createElement('option');
+                option.value = subcategory.id;
+                option.textContent = `${subcategory.icon} ${subcategory.name}`;
+                entrySubcategory.appendChild(option);
+            });
+            entrySubcategory.disabled = false;
+        } else {
+            entrySubcategory.disabled = true;
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní podkategórií:', error);
+        entrySubcategory.disabled = true;
+    }
+}
+
+// Načítanie dostupných rokov
+async function loadYears() {
+    try {
+        const response = await fetch('/api/years');
+        const data = await response.json();
+        
+        if (data.years) {
+            const yearFilter = document.getElementById('yearFilter');
+            yearFilter.innerHTML = '<option value="">Všetky roky</option>';
+            
+            data.years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearFilter.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní rokov:', error);
+    }
+}
+
+// Načítanie záznamov
+async function loadEntries(page = 1) {
+    try {
+        currentPage = page;
+        
+        // Zostavenie URL s filtrami
+        const params = new URLSearchParams();
+        params.append('page', page);
+        
+        const yearFilter = document.getElementById('yearFilter').value;
+        const monthFilter = document.getElementById('monthFilter').value;
+        const mainCategoryFilter = document.getElementById('mainCategoryFilter').value;
+        const subcategoryFilter = document.getElementById('subcategoryFilter').value;
+        const searchInput = document.getElementById('searchInput').value;
+        
+        if (yearFilter) params.append('year', yearFilter);
+        if (monthFilter && yearFilter) params.append('month', monthFilter);
+        
+        // Pre kategórie - ak je vybraná podkategória, použij ju, inak hlavnú
+        if (subcategoryFilter && !subcategoryFilter.disabled) {
+            params.append('category_id', subcategoryFilter);
+        } else if (mainCategoryFilter) {
+            params.append('category_id', mainCategoryFilter);
+        }
+        
+        if (searchInput) params.append('search', searchInput);
+        
+        // Povolenie/zakázanie mesiaca podľa roku
+        document.getElementById('monthFilter').disabled = !yearFilter;
+        
+        const response = await fetch(`/api/entries?${params.toString()}`);
+        const data = await response.json();
+        
+        if (data.entries) {
+            displayEntries(data.entries);
+            displayPagination(data.pagination);
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní záznamov:', error);
+        showAlert('Chyba pri načítavaní záznamov', 'danger');
+    }
+}
+
+// Zobrazenie záznamov
+function displayEntries(entries) {
+    const entriesList = document.getElementById('entriesList');
+    
+    if (entries.length === 0) {
+        entriesList.innerHTML = `
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Žiadne záznamy</h5>
+                    <p class="text-muted">Skús zmeniť filtre alebo pridať nový záznam</p>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    entriesList.innerHTML = entries.map(entry => `
+        <div class="card entry-card fade-in">
+            <div class="entry-header">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">${escapeHtml(entry.title)}</h5>
+                        <div class="entry-date">
+                            <i class="fas fa-calendar-alt"></i> 
+                            ${formatDate(entry.date)} 
+                            <i class="fas fa-clock"></i> 
+                            ${entry.time || ''}
+                        </div>
+                        ${entry.category ? `
+                            <div class="entry-category">
+                                ${entry.category.icon || '📝'} ${entry.category.display_name || entry.category.name}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="entry-content">
+                <div class="entry-text">
+                    ${escapeHtml(entry.content).replace(/\n/g, '<br>')}
+                </div>
+                ${entry.attachments && entry.attachments.length > 0 ? `
+                    <div class="entry-attachments mt-2">
+                        <strong><i class="fas fa-paperclip"></i> Prílohy:</strong>
+                        <div class="mt-1">
+                            ${entry.attachments.map(att => `
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1" 
+                                        onclick="downloadAttachment(${att.id}, '${escapeHtml(att.original_filename).replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-download"></i> ${escapeHtml(att.original_filename)}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="entry-actions">
+                <button class="btn btn-warning btn-sm" onclick="editEntry(${entry.id})">
+                    <i class="fas fa-edit"></i> Editovať
+                </button>
+                <button class="btn btn-danger btn-sm ms-2" onclick="deleteEntry(${entry.id})">
+                    <i class="fas fa-trash"></i> Zmazať
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Zobrazenie paginácie
+function displayPagination(pagination) {
+    const paginationElement = document.getElementById('pagination');
+    
+    if (pagination.pages <= 1) {
+        paginationElement.innerHTML = '';
+        return;
+    }
+    
+    let paginationHtml = '<ul class="pagination justify-content-center">';
+    
+    // Predchádzajúca stránka
+    if (pagination.has_prev) {
+        paginationHtml += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadEntries(${pagination.page - 1})">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+        `;
+    }
+    
+    // Stránky
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(pagination.pages, pagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        paginationHtml += `
+            <li class="page-item ${i === pagination.page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadEntries(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    // Nasledujúca stránka
+    if (pagination.has_next) {
+        paginationHtml += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadEntries(${pagination.page + 1})">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        `;
+    }
+    
+    paginationHtml += '</ul>';
+    paginationElement.innerHTML = paginationHtml;
+}
+
+// Zobrazenie formulára pre pridanie záznamu
+function showAddEntryForm() {
+    try {
+        editingEntryId = null;
+        document.getElementById('entryModalTitle').textContent = 'Pridať záznam';
+        document.getElementById('entryForm').reset();
+        setCurrentDateTime();
+        
+        // Resetovať kategórie
+        document.getElementById('entryMainCategory').value = '';
+        document.getElementById('entrySubcategory').innerHTML = '<option value="">Vyber podkategóriu</option>';
+        document.getElementById('entrySubcategory').disabled = true;
+        
+        // Vyčistiť file input
+        document.getElementById('entryAttachments').value = '';
+        
+        const modalElement = document.getElementById('entryModal');
+        if (!modalElement) {
+            console.error('Modal element not found');
+            return;
+        }
+        
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } catch (error) {
+        console.error('Chyba pri otváraní formulára:', error);
+        showAlert('Chyba pri otváraní formulára: ' + error.message, 'danger');
+    }
+}
+
+// Editácia záznamu
+async function editEntry(entryId) {
+    try {
+        editingEntryId = entryId;
+        const response = await fetch(`/api/entries/${entryId}`);
+        const data = await response.json();
+        
+        if (data.entry) {
+            const entry = data.entry;
+            document.getElementById('entryModalTitle').textContent = 'Editovať záznam';
+            document.getElementById('entryId').value = entry.id;
+            document.getElementById('entryTitle').value = entry.title;
+            document.getElementById('entryContent').value = entry.content;
+            document.getElementById('entryDate').value = entry.date;
+            document.getElementById('entryTime').value = entry.time;
+            
+            // Nastavenie kategórie - musíme zistiť či je to hlavná alebo podkategória
+            if (entry.category_id) {
+                // Načítaj informácie o kategórii
+                const categoryResponse = await fetch(`/api/categories`);
+                const categoryData = await categoryResponse.json();
+                
+                let selectedCategory = null;
+                let parentCategory = null;
+                
+                // Nájdi kategóriu v hierarchii
+                for (let mainCat of categoryData.categories) {
+                    if (mainCat.id === entry.category_id) {
+                        selectedCategory = mainCat;
+                        break;
+                    }
+                    if (mainCat.subcategories) {
+                        for (let subCat of mainCat.subcategories) {
+                            if (subCat.id === entry.category_id) {
+                                selectedCategory = subCat;
+                                parentCategory = mainCat;
+                                break;
+                            }
+                        }
+                    }
+                    if (selectedCategory) break;
+                }
+                
+                if (selectedCategory) {
+                    if (parentCategory) {
+                        // Je to podkategória
+                        document.getElementById('entryMainCategory').value = parentCategory.id;
+                        await updateEntrySubcategories();
+                        document.getElementById('entrySubcategory').value = selectedCategory.id;
+                    } else {
+                        // Je to hlavná kategória
+                        document.getElementById('entryMainCategory').value = selectedCategory.id;
+                        await updateEntrySubcategories();
+                    }
+                }
+            }
+            
+            // Vyčistiť file input pri editácii (nechceme staré súbory)
+            document.getElementById('entryAttachments').value = '';
+            
+            const modal = new bootstrap.Modal(document.getElementById('entryModal'));
+            modal.show();
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní záznamu:', error);
+        showAlert('Chyba pri načítavaní záznamu', 'danger');
+    }
+}
+
+// Uloženie záznamu
+async function saveEntry() {
+    try {
+        const mainCategoryId = document.getElementById('entryMainCategory').value;
+        const subcategoryId = document.getElementById('entrySubcategory').value;
+        
+        // Použij podkategóriu ak je vybraná, inak hlavnú kategóriu
+        const categoryId = subcategoryId || mainCategoryId;
+        
+        const formData = {
+            title: document.getElementById('entryTitle').value,
+            content: document.getElementById('entryContent').value,
+            category_id: parseInt(categoryId),
+            date: document.getElementById('entryDate').value,
+            time: document.getElementById('entryTime').value
+        };
+        
+        // Validácia
+        if (!formData.title || !formData.content || !formData.category_id) {
+            showAlert('Vyplň všetky povinné polia', 'warning');
+            return;
+        }
+        
+        const url = editingEntryId ? `/api/entries/${editingEntryId}` : '/api/entries';
+        const method = editingEntryId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            const entryId = result.entry.id;
+            let successMessage = result.message;
+            
+            // Nahrať prílohy ak sú vybrané - ČAKAJ NA DOKONČENIE!
+            const fileInput = document.getElementById('entryAttachments');
+            if (fileInput.files.length > 0) {
+                const uploadResult = await uploadAttachments(entryId, fileInput.files);
+                if (uploadResult.successCount > 0) {
+                    successMessage += ` (${uploadResult.successCount} príloha/príloh nahrané)`;
+                }
+                if (uploadResult.failCount > 0) {
+                    showAlert(`⚠️ ${uploadResult.failCount} príloha/príloh sa nepodarilo nahrať`, 'warning');
+                }
+            }
+            
+            // Vyčisti file input
+            fileInput.value = '';
+            
+            showAlert(successMessage, 'success');
+            
+            // Zatvorenie modalu a reset formulára
+            const modalElement = document.getElementById('entryModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
+            
+            // Reset form
+            document.getElementById('entryForm').reset();
+            editingEntryId = null;
+            
+            // Obnovenie zoznam
+            loadEntries(currentPage);
+        } else {
+            showAlert(result.error || 'Chyba pri ukladaní', 'danger');
+        }
+    } catch (error) {
+        console.error('Chyba pri ukladaní záznamu:', error);
+        showAlert('Chyba pri ukladaní záznamu', 'danger');
+    }
+}
+
+// Nahrať prílohy k záznamu
+async function uploadAttachments(entryId, files) {
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let file of files) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            console.log(`Nahrávam súbor: ${file.name}`);
+            
+            const response = await fetch(`/api/entries/${entryId}/attachments`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            console.log(`Odpoveď servera pre ${file.name}: ${response.status}`);
+            
+            if (response.ok) {
+                successCount++;
+                console.log(`✓ Súbor ${file.name} bol úspešne nahraný`);
+            } else {
+                failCount++;
+                const error = await response.json();
+                console.error(`✗ Chyba pri nahrávaní ${file.name}: ${error.error}`);
+            }
+        } catch (error) {
+            failCount++;
+            console.error(`✗ Chyba pri nahrávaní ${file.name}:`, error);
+        }
+    }
+    
+    console.log(`Nahrávanie dokončené: ${successCount} úspešne, ${failCount} zlyhal`);
+    
+    return {
+        successCount: successCount,
+        failCount: failCount
+    };
+}
+
+// Zmazanie záznamu
+async function deleteEntry(entryId) {
+    if (!confirm('Naozaj chceš zmazať tento záznam?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/entries/${entryId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            loadEntries(currentPage);
+        } else {
+            showAlert(result.error || 'Chyba pri mazaní', 'danger');
+        }
+    } catch (error) {
+        console.error('Chyba pri mazaní záznamu:', error);
+        showAlert('Chyba pri mazaní záznamu', 'danger');
+    }
+}
+
+// Vymazanie filtrov
+function clearFilters() {
+    document.getElementById('yearFilter').value = '';
+    document.getElementById('monthFilter').value = '';
+    document.getElementById('mainCategoryFilter').value = '';
+    document.getElementById('subcategoryFilter').value = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('monthFilter').disabled = true;
+    document.getElementById('subcategoryFilter').disabled = true;
+    
+    loadEntries(1);
+}
+
+// Vyhľadávanie
+function handleSearch(event) {
+    if (event.key === 'Enter' || event.type === 'input') {
+        clearTimeout(handleSearch.timeout);
+        handleSearch.timeout = setTimeout(() => {
+            loadEntries(1);
+        }, 500);
+    }
+}
+
+// Nastavenie aktuálneho dátumu a času
+function setCurrentDateTime() {
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const time = now.toTimeString().split(' ')[0].substring(0, 5);
+    
+    document.getElementById('entryDate').value = date;
+    document.getElementById('entryTime').value = time;
+}
+
+// Zobrazenie štatistík
+async function showStats() {
+    try {
+        const yearFilter = document.getElementById('yearFilter').value;
+        const url = yearFilter ? `/api/stats?year=${yearFilter}` : '/api/stats';
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data) {
+            displayStats(data, yearFilter);
+            
+            const modal = new bootstrap.Modal(document.getElementById('statsModal'));
+            modal.show();
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní štatistík:', error);
+        showAlert('Chyba pri načítavaní štatistík', 'danger');
+    }
+}
+
+// Zobrazenie štatistík
+function displayStats(stats, year) {
+    const statsContent = document.getElementById('statsContent');
+    
+    const yearText = year ? ` za rok ${year}` : '';
+    
+    statsContent.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <div class="stats-card">
+                    <span class="stats-number">${stats.total_entries}</span>
+                    <span class="stats-label">Celkom záznamov</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stats-card">
+                    <span class="stats-number">${stats.year_entries}</span>
+                    <span class="stats-label">Záznamy${yearText}</span>
+                </div>
+            </div>
+        </div>
+        
+        ${stats.categories.length > 0 ? `
+            <div class="mt-4">
+                <h6>Záznamy podľa kategórií${yearText}</h6>
+                ${stats.categories.map(cat => `
+                    <div class="category-stat">
+                        <span>
+                            <span class="category-icon">${cat.icon}</span>
+                            ${cat.name}
+                        </span>
+                        <span class="badge bg-primary">${cat.count}</span>
+                    </div>
+                `).join('')}
+            </div>
+        ` : ''}
+        
+        ${stats.months.length > 0 ? `
+            <div class="mt-4">
+                <h6>Záznamy podľa mesiacov${yearText}</h6>
+                <div class="row">
+                    ${stats.months.map(month => `
+                        <div class="col-md-3 mb-2">
+                            <div class="category-stat">
+                                <span>${getMonthName(month.month)}</span>
+                                <span class="badge bg-success">${month.count}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+    `;
+}
+
+// Pomocné funkcie
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('sk-SK', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
+function getMonthName(monthNumber) {
+    const months = [
+        'Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún',
+        'Júl', 'August', 'September', 'Október', 'November', 'December'
+    ];
+    return months[monthNumber - 1];
+}
+
+function showAlert(message, type = 'info') {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show position-fixed" 
+             style="top: 20px; right: 20px; z-index: 9999; max-width: 400px;">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', alertHtml);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        if (alerts.length > 0) {
+            alerts[alerts.length - 1].remove();
+        }
+    }, 5000);
+}
+
+// === SPRAVOVANIE KATEGÓRIÍ ===
+let manageCategories = [];
+let manageEditingId = null;
+
+function showManageCategories() {
+    loadManageCategories();
+    const modal = new bootstrap.Modal(document.getElementById('manageCategoriesModal'));
+    modal.show();
+}
+
+async function loadManageCategories() {
+    try {
+        const response = await fetch('/api/categories');
+        const data = await response.json();
+        
+        if (data.categories) {
+            manageCategories = data.categories;
+            displayManageCategories(data.categories);
+            loadManageParentOptions();
+        }
+    } catch (error) {
+        console.error('Chyba pri načítavaní kategórií:', error);
+        showAlert('Chyba pri načítavaní kategórií', 'danger');
+    }
+}
+
+function displayManageCategories(categories) {
+    const categoriesList = document.getElementById('manageCategoriesList');
+    
+    if (categories.length === 0) {
+        categoriesList.innerHTML = '<p class="text-muted">Žiadne kategórie</p>';
+        return;
+    }
+    
+    let html = '';
+    
+    categories.forEach(category => {
+        html += `
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center p-3 border rounded" 
+                     style="background-color: ${category.color}20; border-color: ${category.color};">
+                    <div>
+                        <h6 class="mb-1">
+                            <span style="font-size: 1.2em;">${category.icon}</span>
+                            ${category.name}
+                        </h6>
+                        <small class="text-muted">${category.description || 'Bez popisu'}</small>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="editManageCategory(${category.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="deleteManageCategory(${category.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                ${category.subcategories && category.subcategories.length > 0 ? `
+                    <div class="ms-4 mt-2">
+                        ${category.subcategories.map(sub => `
+                            <div class="d-flex justify-content-between align-items-center p-2 mb-2 border rounded" 
+                                 style="background-color: ${sub.color}15; border-color: ${sub.color};">
+                                <div>
+                                    <span style="font-size: 1.1em;">${sub.icon}</span>
+                                    <strong>${sub.name}</strong>
+                                    ${sub.description ? `<br><small class="text-muted">${sub.description}</small>` : ''}
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" onclick="editManageCategory(${sub.id})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="deleteManageCategory(${sub.id})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+    
+    categoriesList.innerHTML = html;
+}
+
+function loadManageParentOptions() {
+    const parentSelect = document.getElementById('manageParentCategory');
+    parentSelect.innerHTML = '<option value="">Hlavná kategória</option>';
+    
+    manageCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = `${category.icon} ${category.name}`;
+        parentSelect.appendChild(option);
+    });
+}
+
+async function saveManageCategory() {
+    try {
+        const formData = {
+            name: document.getElementById('manageCategoryName').value.trim(),
+            parent_id: document.getElementById('manageParentCategory').value || null,
+            icon: document.getElementById('manageCategoryIcon').value || '📝',
+            color: document.getElementById('manageCategoryColor').value,
+            description: document.getElementById('manageCategoryDescription').value.trim()
+        };
+        
+        if (!formData.name) {
+            showAlert('Názov kategórie je povinný', 'warning');
+            return;
+        }
+        
+        if (formData.parent_id) {
+            formData.parent_id = parseInt(formData.parent_id);
+        }
+        
+        const url = manageEditingId ? `/api/categories/${manageEditingId}` : '/api/categories';
+        const method = manageEditingId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            resetManageForm();
+            loadManageCategories();
+            loadCategories(); // Obnoviť hlavný zoznam kategórií
+        } else {
+            showAlert(result.error || 'Chyba pri ukladaní', 'danger');
+        }
+    } catch (error) {
+        console.error('Chyba pri ukladaní kategórie:', error);
+        showAlert('Chyba pri ukladaní kategórie', 'danger');
+    }
+}
+
+function editManageCategory(categoryId) {
+    let category = null;
+    
+    for (let cat of manageCategories) {
+        if (cat.id === categoryId) {
+            category = cat;
+            break;
+        }
+        if (cat.subcategories) {
+            for (let sub of cat.subcategories) {
+                if (sub.id === categoryId) {
+                    category = sub;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (category) {
+        manageEditingId = categoryId;
+        document.getElementById('manageCategoryName').value = category.name;
+        document.getElementById('manageParentCategory').value = category.parent_id || '';
+        document.getElementById('manageCategoryIcon').value = category.icon;
+        document.getElementById('manageCategoryColor').value = category.color;
+        document.getElementById('manageCategoryDescription').value = category.description || '';
+        
+        document.getElementById('manageCancelEdit').style.display = 'block';
+        document.getElementById('categoryFormTitle').textContent = 'Editovať kategóriu';
+    }
+}
+
+async function deleteManageCategory(categoryId) {
+    if (!confirm('Naozaj chceš zmazať túto kategóriu?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/categories/${categoryId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            loadManageCategories();
+            loadCategories(); // Obnoviť hlavný zoznam kategórií
+        } else {
+            showAlert(result.error || 'Chyba pri mazaní', 'danger');
+        }
+    } catch (error) {
+        console.error('Chyba pri mazaní kategórie:', error);
+        showAlert('Chyba pri mazaní kategórie', 'danger');
+    }
+}
+
+function resetManageForm() {
+    manageEditingId = null;
+    document.getElementById('manageCategoryForm').reset();
+    document.getElementById('manageCategoryIcon').value = '📝';
+    document.getElementById('manageCategoryColor').value = '#4CAF50';
+    document.getElementById('manageCancelEdit').style.display = 'none';
+    document.getElementById('categoryFormTitle').textContent = 'Pridať kategóriu';
+}
+
+function setManageIcon(icon) {
+    document.getElementById('manageCategoryIcon').value = icon;
+}
+
+// Funkcia pre stiahnutie prílohy
+function downloadAttachment(attachmentId, filename) {
+    const link = document.createElement("a");
+    link.href = `/api/attachments/${attachmentId}`;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}

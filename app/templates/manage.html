@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spravovanie kategórií - Denník</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-arrow-left"></i> Osobný denník
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text">
+                    <i class="fas fa-cog"></i> Spravovanie kategórií
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-list"></i> Existujúce kategórie</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="categoriesList">
+                            <!-- Kategórie sa načítajú cez JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-plus"></i> Pridať kategóriu</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="categoryForm">
+                            <input type="hidden" id="editingCategoryId">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Nadkategória</label>
+                                <select class="form-select" id="parentCategory">
+                                    <option value="">Hlavná kategória</option>
+                                </select>
+                                <div class="form-text">Nechaj prázdne pre hlavnú kategóriu</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Názov *</label>
+                                <input type="text" class="form-control" id="categoryName" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Ikona</label>
+                                <div class="row">
+                                    <div class="col-3">
+                                        <input type="text" class="form-control" id="categoryIcon" value="📝" maxlength="2">
+                                    </div>
+                                    <div class="col-9">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setIcon('📝')">📝</button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setIcon('👨‍👩‍👧‍👦')">👨‍👩‍👧‍👦</button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setIcon('🏠')">🏠</button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setIcon('🚗')">🚗</button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setIcon('💼')">💼</button>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="setIcon('🌱')">🌱</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Farba</label>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <input type="color" class="form-control form-control-color" id="categoryColor" value="#4CAF50">
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary" style="background:#FF6B9D" onclick="setColor('#FF6B9D')"></button>
+                                            <button type="button" class="btn btn-outline-secondary" style="background:#4ECDC4" onclick="setColor('#4ECDC4')"></button>
+                                            <button type="button" class="btn btn-outline-secondary" style="background:#45B7D1" onclick="setColor('#45B7D1')"></button>
+                                            <button type="button" class="btn btn-outline-secondary" style="background:#96CEB4" onclick="setColor('#96CEB4')"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Popis</label>
+                                <textarea class="form-control" id="categoryDescription" rows="3"></textarea>
+                            </div>
+                        </form>
+                        
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="saveCategory()">
+                                <i class="fas fa-save"></i> Uložiť kategóriu
+                            </button>
+                            <button class="btn btn-secondary" onclick="resetForm()" style="display:none;" id="cancelEdit">
+                                <i class="fas fa-times"></i> Zrušiť editáciu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-info-circle"></i> Informácie</h6>
+                    </div>
+                    <div class="card-body">
+                        <small class="text-muted">
+                            • Máš maximálne 2 úrovne kategórií<br>
+                            • Hlavné kategórie → Podkategórie<br>
+                            • Nemôžeš zmazať kategóriu s existujúcimi záznammi<br>
+                            • Ikony môžeš kopírovať z emoji klávesnice
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/manage.js"></script>
+</body>
+</html>

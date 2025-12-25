@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prehliadač PDF</title>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; }
+    #toolbar { background:#f4f4f4; padding:8px; display:flex; gap:8px; align-items:center }
+    #canvasContainer { text-align:center; background:#777; }
+    canvas { background: #fff; margin: 10px auto; display:block }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="prev">◀️ Predchádzajúca</button>
+    <button id="next">▶️ Nasledujúca</button>
+    <span>Strana: <span id="page_num">0</span> / <span id="page_count">0</span></span>
+    <label style="margin-left:auto">Zoom: <input id="zoom" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+    <a id="download" href="#" style="margin-left:8px">Stiahnuť</a>
+  </div>
+  <div id="canvasContainer">
+    <canvas id="pdfCanvas"></canvas>
+  </div>
+
+  <!-- PDF.js (lokálne fallback) -->
+  <script src="/static/pdfjs/pdf.min.js"></script>
+  <script>
+    const url = '{{ file_url }}';
+    // Podpora rôznych global exportov pdf.js
+    const pdfjsLib = window['pdfjs-dist/build/pdf'] || window['pdfjsDistBuildPdf'] || window['pdfjsLib'] || window['pdfjs'];
+    // Namiesto CDN použiť lokálny worker
+    if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdfjs/pdf.worker.min.js';
+    }
+    // Zobrazovací element pre chyby
+    function showError(msg){
+      const d = document.getElementById('canvasContainer');
+      d.innerHTML = '<div style="padding:20px;color:#900;background:#fff">'+msg+'</div>';
+    }
+
+    let pdfDoc = null, pageNum = 1, scale = 1.0, canvas = document.getElementById('pdfCanvas'), ctx = canvas.getContext('2d');
+
+    function renderPage(num) {
+      pdfDoc.getPage(num).then(function(page) {
+        const viewport = page.getViewport({ scale: scale });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        const renderContext = { canvasContext: ctx, viewport: viewport };
+        page.render(renderContext);
+        document.getElementById('page_num').textContent = pageNum;
+      });
+    }
+
+    if (!pdfjsLib) {
+      showError('PDF.js sa nenačítal. Skontrolujte console (Ctrl+Shift+I).');
+      console.error('pdfjsLib not found');
+    } else {
+      pdfjsLib.getDocument(url).promise.then(function(pdf) {
+        pdfDoc = pdf;
+        document.getElementById('page_count').textContent = pdf.numPages;
+        renderPage(pageNum);
+      }).catch(function(err){
+        showError('Chyba pri načítaní PDF: ' + err.message);
+        console.error(err);
+      });
+    }
+
+    document.getElementById('prev').addEventListener('click', function(){ if(pageNum <=1) return; pageNum--; renderPage(pageNum); });
+    document.getElementById('next').addEventListener('click', function(){ if(pageNum >= pdfDoc.numPages) return; pageNum++; renderPage(pageNum); });
+    document.getElementById('zoom').addEventListener('input', function(e){ scale = parseFloat(e.target.value); renderPage(pageNum); });
+    document.getElementById('download').href = url + '?download=1';
+  </script>
+</body>
+</html>
